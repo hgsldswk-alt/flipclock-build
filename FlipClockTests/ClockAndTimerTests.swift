@@ -1,0 +1,82 @@
+import XCTest
+
+final class ClockAndTimerTests: XCTestCase {
+    private var calendar: Calendar {
+        var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(secondsFromGMT: 0)!; c.firstWeekday = 2; return c
+    }
+    private func date(_ hour: Int, _ minute: Int = 24, _ second: Int = 36) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 11, day: 16, hour: hour, minute: minute, second: second))!
+    }
+    func testMidnightNoonAndSecondsInAllLanguages() {
+        var settings = FaceConfiguration(); settings.format = .twelve; settings.showSeconds = true
+        for language in ["zh_CN", "zh_TW", "en_US"] {
+            let locale = Locale(identifier: language)
+            let midnight = ClockFormat.strings(at: date(0), calendar: calendar, locale: locale, settings: settings)
+            let noon = ClockFormat.strings(at: date(12), calendar: calendar, locale: locale, settings: settings)
+            XCTAssertEqual(midnight.hour, "12"); XCTAssertEqual(noon.hour, "12")
+            XCTAssertEqual(midnight.minute, "24"); XCTAssertEqual(midnight.second, "36")
+            XCTAssertEqual(midnight.period, language.hasPrefix("zh") ? "上午" : "AM")
+            XCTAssertEqual(noon.period, language.hasPrefix("zh") ? "下午" : "PM")
+            XCTAssertNotNil(midnight.date)
+        }
+        settings.format = .twentyFour; settings.showSeconds = false; settings.showDate = false
+        let result = ClockFormat.strings(at: date(0, 0, 0), calendar: calendar, locale: Locale(identifier: "en_US"), settings: settings)
+        XCTAssertEqual(result.time, "00:00"); XCTAssertNil(result.period); XCTAssertNil(result.date); XCTAssertNil(result.second)
+        settings.format = .twelve; settings.showPeriod = false
+        XCTAssertNil(ClockFormat.strings(at: date(13), calendar: calendar, settings: settings).period)
+    }
+    func testSystemFormatAndNextSecond() {
+        XCTAssertFalse(ClockFormat.uses24(.system, locale: Locale(identifier: "en_US")))
+        XCTAssertTrue(ClockFormat.uses24(.system, locale: Locale(identifier: "en_GB")))
+        XCTAssertTrue(ClockFormat.uses24(.twentyFour, locale: Locale(identifier: "en_US")))
+        let now = Date(timeIntervalSince1970: 100.999)
+        XCTAssertEqual(ClockFormat.nextSecond(after: now).timeIntervalSince1970, 101)
+        XCTAssertEqual(ClockFormat.nextSecond(after: Date(timeIntervalSince1970: 101)).timeIntervalSince1970, 102)
+    }
+    func testCountdownEverySecondAndFractionalBoundary() {
+        let start = date(10)
+        var timer = FocusTimer(); timer.start(duration: 5, now: start)
+        XCTAssertEqual((0...5).map { timer.remaining(now: start.addingTimeInterval(Double($0))) }, [5, 4, 3, 2, 1, 0])
+        XCTAssertEqual(timer.remaining(now: start.addingTimeInterval(4.001)), 1)
+        XCTAssertEqual(timer.remaining(now: start.addingTimeInterval(4)), 1)
+        XCTAssertEqual(timer.remaining(now: start.addingTimeInterval(3.999)), 2)
+        XCTAssertFalse(timer.isFinished(now: start.addingTimeInterval(4.999)))
+        XCTAssertTrue(timer.isFinished(now: start.addingTimeInterval(5)))
+        XCTAssertEqual(timer.remaining(now: start.addingTimeInterval(99)), 0)
+    }
+    func testPauseResumeAndProcessRestoration() throws {
+        let start = date(10)
+        var timer = FocusTimer(); timer.start(duration: 30, now: start)
+        let restored = try JSONDecoder().decode(FocusTimer.self, from: JSONEncoder().encode(timer))
+        XCTAssertEqual(restored.remaining(now: start.addingTimeInterval(12)), 18)
+        timer.pause(now: start.addingTimeInterval(10.25)); XCTAssertTrue(timer.isPaused)
+        XCTAssertEqual(timer.rawRemaining(now: start.addingTimeInterval(200)), 19.75, accuracy: 0.0001)
+        timer.resume(now: start.addingTimeInterval(100))
+        XCTAssertEqual(timer.endAt!.timeIntervalSince(start), 119.75, accuracy: 0.0001)
+        timer.resume(now: start.addingTimeInterval(200))
+        XCTAssertEqual(timer.endAt!.timeIntervalSince(start), 119.75, accuracy: 0.0001)
+        timer.stop(); XCTAssertFalse(timer.isRunning); XCTAssertFalse(timer.isPaused)
+    }
+    func testPomodoroRoundsLongBreakAndManualNext() {
+        let now = date(10); let plan = FocusPlan()
+        var timer = FocusTimer(); timer.kind = .pomodoro; timer.start(duration: plan.duration(.focus), now: now)
+        for round in 1...4 {
+            XCTAssertEqual(timer.round, round); XCTAssertEqual(timer.phase, .focus)
+            timer.next(plan: plan, now: now, startImmediately: false)
+            XCTAssertEqual(timer.phase, round == 4 ? .longBreak : .shortBreak)
+            XCTAssertEqual(timer.remaining(now: now), round == 4 ? 900 : 300); XCTAssertTrue(timer.isPaused)
+            timer.resume(now: now); XCTAssertTrue(timer.isRunning)
+            timer.next(plan: plan, now: now, startImmediately: true)
+        }
+        XCTAssertEqual(timer.round, 5); XCTAssertEqual(timer.remaining(now: now), 1500)
+    }
+    func testStopwatchLapsPauseAndReload() throws {
+        let now = date(10); var watch = Stopwatch(); watch.start(now: now)
+        watch.start(now: now.addingTimeInterval(5)); watch.lap(now: now.addingTimeInterval(10))
+        watch.pause(now: now.addingTimeInterval(15)); XCTAssertEqual(watch.elapsed(now: now.addingTimeInterval(50)), 15)
+        watch.start(now: now.addingTimeInterval(100)); watch.lap(now: now.addingTimeInterval(105))
+        let restored = try JSONDecoder().decode(Stopwatch.self, from: JSONEncoder().encode(watch))
+        XCTAssertEqual(restored.laps, [20, 10]); XCTAssertEqual(restored.elapsed(now: now.addingTimeInterval(110)), 25)
+        watch.reset(); XCTAssertEqual(watch.elapsed(now: now), 0); XCTAssertTrue(watch.laps.isEmpty)
+    }
+}

@@ -1,0 +1,130 @@
+name: FlipClock
+options:
+  deploymentTarget:
+    iOS: "17.0"
+  developmentLanguage: zh-Hans
+  knownRegions: [zh-Hans, en, zh-Hant]
+settings:
+  base:
+    APP_ID: com.hgsldswk.flipclock
+    APP_STORE_ID: "6836216649"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    TARGETED_DEVICE_FAMILY: "1"
+targets:
+  FlipClock:
+    type: application
+    platform: iOS
+    sources:
+      - FlipClock
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_ID)
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"  # XcodeGen 默认 1,2 会盖掉项目级设置，必须写在 target 上
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          PROVISIONING_PROFILE_SPECIFIER: FlipClock AppStore
+    info:
+      path: FlipClock/Info.plist
+      properties:
+        CFBundleDisplayName: 翻页时钟
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UIRequiresFullScreen: true
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+        NSSupportsLiveActivities: true
+        ITSAppUsesNonExemptEncryption: false
+        NSPhotoLibraryAddUsageDescription: 保存你选择分享的时钟图片到相册。
+        FlipClockAppGroup: group.$(APP_ID)
+        FlipClockProProductID: $(APP_ID).pro
+        FlipClockTrialProductID: $(APP_ID).trial
+        APP_STORE_ID: $(APP_STORE_ID)
+        FlipClockPrivacyURL: https://hgsldswk-alt.github.io/flipclock-support/#privacy
+        FlipClockHelpURL: https://hgsldswk-alt.github.io/flipclock-support/
+        CFBundleURLTypes:
+          - CFBundleURLSchemes: [flipclock]
+    entitlements:
+      path: FlipClock/FlipClock.entitlements
+      properties:
+        com.apple.security.application-groups: [group.$(APP_ID)]
+    dependencies:
+      - target: FlipClockWidget
+  FlipClockWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - FlipClockWidget
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_ID).widget
+        TARGETED_DEVICE_FAMILY: "1"  # XcodeGen 默认 1,2 会盖掉项目级设置，必须写在 target 上
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          PROVISIONING_PROFILE_SPECIFIER: FlipClock Widget AppStore
+    info:
+      path: FlipClockWidget/Info.plist
+      properties:
+        CFBundleDisplayName: 翻页时钟
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        FlipClockAppGroup: group.$(APP_ID)
+    entitlements:
+      path: FlipClockWidget/FlipClockWidget.entitlements
+      properties:
+        com.apple.security.application-groups: [group.$(APP_ID)]
+  FlipClockTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - FlipClockTests
+      - Shared
+      - FlipClock/ReviewGate.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_ID).tests
+        GENERATE_INFOPLIST_FILE: YES
+  FlipClockUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - FlipClockUITests
+    dependencies:
+      - target: FlipClock
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_ID).uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: FlipClock
+schemes:
+  FlipClock:
+    build:
+      targets:
+        FlipClock: all
+        FlipClockTests: [test]
+    test:
+      config: Debug
+      targets: [FlipClockTests]
+  FlipClockUI:
+    build:
+      targets:
+        FlipClock: all
+        FlipClockUITests: [test]
+    test:
+      config: Debug
+      targets: [FlipClockUITests]
